@@ -1,0 +1,693 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>
+            Strava Stats Dashboard
+        </title>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js">
+        </script>
+        <style>
+            * { box-sizing: border-box; margin: 0; padding: 0; }
+            body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f8f7f4; color: #1a1a1a; min-height: 100vh; }
+            
+            .page { max-width: 900px; margin: 0 auto; padding: 2rem 1.5rem; }
+            
+            /* Auth screen */
+            .auth-screen { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 60vh; text-align: center; gap: 1.5rem; }
+            .auth-screen h1 { font-size: 1.5rem; font-weight: 500; }
+            .auth-screen p { color: #666; font-size: 0.95rem; max-width: 380px; line-height: 1.6; }
+            .strava-btn { display: inline-flex; align-items: center; gap: 10px; background: #FC4C02; color: #fff; border: none; border-radius: 8px; padding: 12px 24px; font-size: 1rem; font-weight: 500; cursor: pointer; text-decoration: none; }
+            .strava-btn:hover { background: #e04300; }
+            .strava-logo { width: 22px; height: 22px; }
+            
+            /* Token entry fallback */
+            .token-entry { display: flex; flex-direction: column; gap: 10px; width: 100%; max-width: 420px; margin-top: 0.5rem; }
+            .token-entry input { border: 1px solid #ddd; border-radius: 8px; padding: 10px 14px; font-size: 0.9rem; width: 100%; }
+            .token-entry button { background: #1a1a1a; color: #fff; border: none; border-radius: 8px; padding: 10px 20px; font-size: 0.95rem; cursor: pointer; }
+            .token-entry button:hover { background: #333; }
+            .divider { display: flex; align-items: center; gap: 12px; width: 100%; max-width: 420px; color: #999; font-size: 0.85rem; }
+            .divider::before, .divider::after { content: ''; flex: 1; height: 1px; background: #ddd; }
+            
+            /* Dashboard */
+            .dashboard { display: none; }
+            .dash-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 2rem; flex-wrap: gap; }
+            .dash-header h1 { font-size: 1.4rem; font-weight: 500; }
+            .dash-header .sub { font-size: 0.85rem; color: #888; margin-top: 2px; }
+            .refresh-btn { background: none; border: 1px solid #ddd; border-radius: 8px; padding: 7px 14px; font-size: 0.85rem; cursor: pointer; color: #555; }
+            .refresh-btn:hover { background: #f0efe9; }
+            .logout-btn { background: none; border: none; color: #aaa; font-size: 0.8rem; cursor: pointer; padding: 4px 8px; margin-left: 8px; }
+            .logout-btn:hover { color: #666; }
+            
+            /* Unit toggle */
+            .unit-toggle { display: inline-flex; border: 1px solid #ddd; border-radius: 8px; overflow: hidden; margin-left: 8px; }
+            .unit-toggle button { background: none; border: none; padding: 7px 12px; font-size: 0.82rem; cursor: pointer; color: #888; transition: background 0.15s, color 0.15s; }
+            .unit-toggle button.active { background: #1a1a1a; color: #fff; }
+            .unit-toggle button:not(.active):hover { background: #f0efe9; }
+            
+            /* Indoor/outdoor split */
+            .split-row { display: flex; gap: 8px; margin-top: 6px; flex-wrap: wrap; }
+            .pill { font-size: 0.72rem; font-weight: 500; padding: 2px 8px; border-radius: 20px; white-space: nowrap; }
+            .pill-out { background: #fff0ea; color: #b83900; }
+            .pill-in  { background: #eaf0fb; color: #1a4f9c; }
+            .legend-row { display: flex; gap: 16px; margin-bottom: 10px; font-size: 0.78rem; color: #888; align-items: center; }
+            .legend-dot { width: 10px; height: 10px; border-radius: 2px; display: inline-block; margin-right: 4px; }
+            
+            /* Stat cards */
+            .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-bottom: 2rem; }
+            .stat-card { background: #fff; border: 0.5px solid #e0dfd8; border-radius: 12px; padding: 1.25rem; }
+            .stat-label { font-size: 0.78rem; color: #888; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px; display: flex; align-items: center; gap: 6px; }
+            .stat-value { font-size: 1.75rem; font-weight: 500; color: #1a1a1a; line-height: 1; }
+            .stat-unit { font-size: 0.85rem; font-weight: 400; color: #888; margin-left: 3px; }
+            .stat-delta { font-size: 0.78rem; color: #888; margin-top: 4px; }
+            .stat-icon { font-size: 1rem; }
+            
+            /* Charts */
+            .chart-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 2rem; }
+            @media (max-width: 600px) { .chart-grid { grid-template-columns: 1fr; } }
+            .chart-card { background: #fff; border: 0.5px solid #e0dfd8; border-radius: 12px; padding: 1.25rem; }
+            .chart-title { font-size: 0.85rem; font-weight: 500; color: #555; margin-bottom: 1rem; }
+            .chart-wrap { position: relative; height: 200px; }
+            
+            /* Month table */
+            .table-card { background: #fff; border: 0.5px solid #e0dfd8; border-radius: 12px; padding: 1.25rem; }
+            .table-card table { width: 100%; font-size: 0.85rem; border-collapse: collapse; }
+            .table-card th { text-align: left; color: #888; font-weight: 500; padding: 0 0 10px; border-bottom: 0.5px solid #eee; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.04em; }
+            .table-card th:not(:first-child) { text-align: right; }
+            .table-card td { padding: 9px 0; border-bottom: 0.5px solid #f5f5f3; color: #333; }
+            .table-card td:not(:first-child) { text-align: right; color: #555; }
+            .table-card tr:last-child td { border-bottom: none; }
+            .table-card tr.total td { font-weight: 500; color: #1a1a1a; border-top: 0.5px solid #ddd; border-bottom: none; padding-top: 12px; }
+            
+            /* Loading */
+            .loading { display: none; flex-direction: column; align-items: center; justify-content: center; min-height: 60vh; gap: 1rem; color: #888; }
+            .spinner { width: 28px; height: 28px; border: 2px solid #eee; border-top-color: #FC4C02; border-radius: 50%; animation: spin 0.8s linear infinite; }
+            @keyframes spin { to { transform: rotate(360deg); } }
+            
+            /* Error */
+            .error-msg { background: #fff3f0; border: 1px solid #ffc5b2; border-radius: 8px; padding: 12px 16px; font-size: 0.88rem; color: #c0391a; margin-top: 1rem; max-width: 420px; }
+            
+            .instructions { background: #fff; border: 0.5px solid #e0dfd8; border-radius: 12px; padding: 1.5rem; max-width: 480px; text-align: left; font-size: 0.88rem; color: #555; line-height: 1.7; }
+            .instructions h3 { font-size: 0.9rem; font-weight: 500; color: #1a1a1a; margin-bottom: 0.75rem; }
+            .instructions ol { padding-left: 1.2rem; }
+            .instructions li { margin-bottom: 0.4rem; }
+            .instructions a { color: #FC4C02; }
+            .instructions code { background: #f5f5f3; padding: 1px 5px; border-radius: 4px; font-size: 0.82rem; }
+        </style>
+    </head>
+    <body>
+        <div class="page">
+<!-- Auth screen -->
+            <div class="auth-screen" id="authScreen">
+                <svg class="strava-logo" style="width:48px;height:48px" viewBox="0 0 24 24" fill="#FC4C02">
+                    <path d="M15.387 17.944l-2.089-4.116h-3.065L15.387 24l5.15-10.172h-3.066m-7.008-5.599l2.836 5.598h4.172L10.463 0l-7 13.828h4.169"/>
+                </svg>
+                <h1>
+                    Strava Stats Dashboard
+                </h1>
+                <p>
+                    Connect your Strava account to see your year-to-date cycling stats — mileage, elevation, ride count, and monthly breakdown.
+                </p>
+                <div class="instructions">
+                    <h3>
+                        How to get your access token
+                    </h3>
+                    <ol>
+                        <li>
+                            Go to
+                            <a href="https://www.strava.com/settings/api" target="_blank">
+                                strava.com/settings/api
+                            </a>
+                            and create an app (any name/website)
+                        </li>
+                        <li>
+                            Note your
+                            <strong>
+                                Client ID
+                            </strong>
+                            and
+                            <strong>
+                                Client Secret
+                            </strong>
+                        </li>
+                        <li>
+                            Visit this URL in your browser (replace CLIENT_ID):
+                            <br>
+                            <code>
+                                https://www.strava.com/oauth/authorize?client_id=CLIENT_ID&redirect_uri=http://localhost&response_type=code&scope=activity:read_all
+                            </code>
+                        </li>
+                        <li>
+                            After approving, copy the
+                            <code>
+                                code=
+                            </code>
+                            value from the redirect URL
+                        </li>
+                        <li>
+                            Exchange it for a token using the form below (or via curl/Postman)
+                        </li>
+                    </ol>
+                </div>
+                <div style="width:100%;max-width:420px;display:flex;flex-direction:column;gap:10px;margin-top:0.5rem">
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+                        <input id="clientId" placeholder="Client ID" style="border:1px solid #ddd;border-radius:8px;padding:10px 14px;font-size:0.9rem"/>
+                        <input id="clientSecret" placeholder="Client Secret" type="password" style="border:1px solid #ddd;border-radius:8px;padding:10px 14px;font-size:0.9rem"/>
+                    </div>
+                    <input id="authCode" placeholder="Authorization code (from redirect URL)" style="border:1px solid #ddd;border-radius:8px;padding:10px 14px;font-size:0.9rem"/>
+                    <button onclick="exchangeToken()" style="background:#FC4C02;color:#fff;border:none;border-radius:8px;padding:11px;font-size:0.95rem;cursor:pointer;font-weight:500">
+                        Get access token & load dashboard
+                    </button>
+                </div>
+                <div class="divider" style="width:100%;max-width:420px">
+                    or paste existing token
+                </div>
+                <div class="token-entry">
+                    <input id="tokenInput" type="password" placeholder="Paste Strava access token…" />
+                    <button onclick="loadWithToken()">
+                        Load dashboard
+                    </button>
+                </div>
+                <div id="authError" class="error-msg" style="display:none">
+                </div>
+            </div>
+<!-- Loading -->
+            <div class="loading" id="loadingScreen">
+                <div class="spinner">
+                </div>
+                <span>
+                    Loading your rides…
+                </span>
+            </div>
+<!-- Dashboard -->
+            <div class="dashboard" id="dashboard">
+                <div class="dash-header">
+                    <div>
+                        <h1 id="dashTitle">
+                            YTD Cycling
+                        </h1>
+                        <div class="sub" id="dashSub">
+                        </div>
+                    </div>
+                    <div>
+                        <button class="refresh-btn" onclick="refreshData()">
+                            ↻ Refresh
+                        </button>
+                        <div class="unit-toggle" style="display:inline-flex">
+                            <button id="btnKm" class="active" onclick="setUnit('km')">
+                                km
+                            </button>
+                            <button id="btnMi" onclick="setUnit('mi')">
+                                mi
+                            </button>
+                        </div>
+                        <button class="logout-btn" onclick="logout()">
+                            Sign out
+                        </button>
+                    </div>
+                </div>
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-label">
+                            🚴 Rides
+                        </div>
+                        <div class="stat-value" id="statRides">
+                            —
+                        </div>
+                        <div class="split-row">
+                            <span class="pill pill-out" id="splitRidesOut">
+                                —
+                            </span>
+                            <span class="pill pill-in" id="splitRidesIn">
+                                —
+                            </span>
+                        </div>
+                        <div class="stat-delta" id="statRidesDelta">
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">
+                            📏 Distance
+                        </div>
+                        <div class="stat-value" id="statDist">
+                            —
+                            <span class="stat-unit">
+                                km
+                            </span>
+                        </div>
+                        <div class="split-row">
+                            <span class="pill pill-out" id="splitDistOut">
+                                —
+                            </span>
+                            <span class="pill pill-in" id="splitDistIn">
+                                —
+                            </span>
+                        </div>
+                        <div class="stat-delta" id="statDistDelta">
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">
+                            ⛰️ Elevation
+                        </div>
+                        <div class="stat-value" id="statElev">
+                            —
+                            <span class="stat-unit">
+                                m
+                            </span>
+                        </div>
+                        <div class="split-row">
+                            <span class="pill pill-out" id="splitElevOut">
+                                —
+                            </span>
+                            <span class="pill pill-in" id="splitElevIn">
+                                —
+                            </span>
+                        </div>
+                        <div class="stat-delta" id="statElevDelta">
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">
+                            ⏱️ Moving time
+                        </div>
+                        <div class="stat-value" id="statTime">
+                            —
+                        </div>
+                        <div class="split-row">
+                            <span class="pill pill-out" id="splitTimeOut">
+                                —
+                            </span>
+                            <span class="pill pill-in" id="splitTimeIn">
+                                —
+                            </span>
+                        </div>
+                        <div class="stat-delta" id="statTimeDelta">
+                        </div>
+                    </div>
+                    <div class="stat-card" style="border-color:#b3ddb3">
+                        <div class="stat-label" style="color:#3a7d3a">
+                            🌿 CO₂ saved
+                        </div>
+                        <div class="stat-value" id="statCo2">
+                            —
+                            <span class="stat-unit">
+                                kg
+                            </span>
+                        </div>
+                        <div class="stat-delta" id="statCo2Delta" style="color:#3a7d3a">
+                        </div>
+                        <div class="stat-delta" id="statCo2Method" style="margin-top:4px">
+                        </div>
+                    </div>
+                </div>
+                <div class="chart-grid">
+                    <div class="chart-card">
+                        <div class="chart-title">
+                            Monthly distance (km)
+                        </div>
+                        <div class="legend-row">
+                            <span>
+                                <span class="legend-dot" style="background:#FC4C02">
+                                </span>
+                                Outdoor
+                            </span>
+                            <span>
+                                <span class="legend-dot" style="background:#4a80d4">
+                                </span>
+                                Indoor
+                            </span>
+                        </div>
+                        <div class="chart-wrap">
+                            <canvas id="distChart" role="img" aria-label="Monthly distance bar chart, split indoor outdoor">
+                            </canvas>
+                        </div>
+                    </div>
+                    <div class="chart-card">
+                        <div class="chart-title">
+                            Monthly elevation (m)
+                        </div>
+                        <div class="legend-row">
+                            <span>
+                                <span class="legend-dot" style="background:#3d3d3d">
+                                </span>
+                                Outdoor
+                            </span>
+                            <span>
+                                <span class="legend-dot" style="background:#aaa">
+                                </span>
+                                Indoor
+                            </span>
+                        </div>
+                        <div class="chart-wrap">
+                            <canvas id="elevChart" role="img" aria-label="Monthly elevation bar chart, split indoor outdoor">
+                            </canvas>
+                        </div>
+                    </div>
+                </div>
+                <div class="chart-card" style="margin-bottom:1.5rem">
+                    <div class="chart-title">
+                        Cumulative distance YTD (km)
+                    </div>
+                    <div class="legend-row">
+                        <span>
+                            <span class="legend-dot" style="background:#FC4C02">
+                            </span>
+                            Outdoor
+                        </span>
+                        <span>
+                            <span class="legend-dot" style="background:#4a80d4">
+                            </span>
+                            Indoor
+                        </span>
+                    </div>
+                    <div class="chart-wrap" style="height:160px">
+                        <canvas id="cumulChart" role="img" aria-label="Cumulative distance line chart">
+                        </canvas>
+                    </div>
+                </div>
+                <div class="table-card">
+                    <div class="chart-title" style="margin-bottom:1rem">
+                        Monthly breakdown
+                    </div>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>
+                                    Month
+                                </th>
+                                <th>
+                                    Rides
+                                </th>
+                                <th id="distColHead">
+                                    Distance
+                                </th>
+                                <th id="distInColHead">
+                                    Indoor dist
+                                </th>
+                                <th>
+                                    Elevation
+                                </th>
+                                <th>
+                                    Moving time
+                                </th>
+                            </tr>
+                        </thead>
+                        <tbody id="monthTable">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        <script>
+            const MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+            let distChartInst, elevChartInst, cumulChartInst;
+            let unit = localStorage.getItem('stravaUnit') || 'km';
+            let cachedRides = null, cachedYear = null;
+            
+            function setUnit(u) {
+              unit = u;
+              localStorage.setItem('stravaUnit', u);
+              document.getElementById('btnKm').classList.toggle('active', u === 'km');
+              document.getElementById('btnMi').classList.toggle('active', u === 'mi');
+              if (cachedRides) renderDashboard(cachedRides, cachedYear);
+            }
+            
+            function d(km) { return unit === 'mi' ? km * 0.621371 : km; }
+            function dUnit() { return unit; }
+            function fmtD(km) { return Math.round(d(km)).toLocaleString() + ' ' + dUnit(); }
+            
+            function show(id) {
+              ['authScreen','loadingScreen','dashboard'].forEach(s => {
+                document.getElementById(s).style.display = s === id ? (s === 'dashboard' ? 'block' : s === 'loadingScreen' ? 'flex' : 'flex') : 'none';
+              });
+            }
+            
+            async function exchangeToken() {
+              const clientId = document.getElementById('clientId').value.trim();
+              const clientSecret = document.getElementById('clientSecret').value.trim();
+              const code = document.getElementById('authCode').value.trim();
+              if (!clientId || !clientSecret || !code) { showError('Please fill in Client ID, Client Secret, and authorization code.'); return; }
+              show('loadingScreen');
+              try {
+                const res = await fetch('https://www.strava.com/oauth/token', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ client_id: clientId, client_secret: clientSecret, code, grant_type: 'authorization_code' })
+                });
+                const data = await res.json();
+                if (!data.access_token) { show('authScreen'); showError(data.message || 'Token exchange failed.'); return; }
+                localStorage.setItem('stravaToken', data.access_token);
+                if (data.athlete) localStorage.setItem('stravaAthlete', JSON.stringify({ name: data.athlete.firstname + ' ' + data.athlete.lastname }));
+                await loadDashboard(data.access_token);
+              } catch(e) { show('authScreen'); showError('Request failed: ' + e.message); }
+            }
+            
+            function loadWithToken() {
+              const token = document.getElementById('tokenInput').value.trim();
+              if (!token) { showError('Please paste an access token.'); return; }
+              localStorage.setItem('stravaToken', token);
+              loadDashboard(token);
+            }
+            
+            function showError(msg) {
+              const el = document.getElementById('authError');
+              el.textContent = msg;
+              el.style.display = 'block';
+            }
+            
+            function logout() {
+              localStorage.removeItem('stravaAthlete');
+              localStorage.removeItem('stravaTokenCache');
+              getFreshToken().then(loadDashboard);
+            }
+            
+            async function refreshData() {
+              const token = await getFreshToken();
+              loadDashboard(token);
+            }
+            
+            async function loadDashboard(token) {
+              show('loadingScreen');
+              try {
+                const year = new Date().getFullYear();
+                const after = Math.floor(new Date(year, 0, 1).getTime() / 1000);
+                let page = 1, allRides = [];
+                while (true) {
+                  const res = await fetch(`https://www.strava.com/api/v3/athlete/activities?after=${after}&per_page=200&page=${page}`, {
+                    headers: { Authorization: `Bearer ${token}` }
+                  });
+                  if (!res.ok) {
+                    const err = await res.json();
+                    show('authScreen');
+                    showError(err.message || 'API error ' + res.status);
+                    return;
+                  }
+                  const batch = await res.json();
+                  if (!batch.length) break;
+                  const rides = batch.filter(a => ['Ride','VirtualRide','GravelRide','MountainBikeRide','EBikeRide'].includes(a.type));
+                  allRides = allRides.concat(rides);
+                  if (batch.length < 200) break;
+                  page++;
+                }
+                renderDashboard(allRides, year);
+              } catch(e) {
+                show('authScreen');
+                showError('Failed to load: ' + e.message);
+              }
+            }
+            
+            const INDOOR_TYPES = new Set(['VirtualRide']);
+            function isIndoor(r) { return INDOOR_TYPES.has(r.type) || r.trainer === true; }
+            
+            function fmtTime(secs) {
+              const h = Math.floor(secs / 3600), m = Math.floor((secs % 3600) / 60);
+              return `${h}h ${m}m`;
+            }
+            
+            function renderDashboard(rides, year) {
+              cachedRides = rides; cachedYear = year;
+              document.getElementById('btnKm').classList.toggle('active', unit === 'km');
+              document.getElementById('btnMi').classList.toggle('active', unit === 'mi');
+              const athlete = JSON.parse(localStorage.getItem('stravaAthlete') || '{}');
+              document.getElementById('dashTitle').textContent = (athlete.name ? athlete.name + ' — ' : '') + `YTD Cycling ${year}`;
+              document.getElementById('dashSub').textContent = `Data from ${rides.length} ride${rides.length !== 1 ? 's' : ''} · Jan 1 – today`;
+            
+              // Aggregate by month, split indoor/outdoor (km internally)
+              const months = Array.from({length: 12}, () => ({
+                out: { rides: 0, dist: 0, elev: 0, time: 0 },
+                in:  { rides: 0, dist: 0, elev: 0, time: 0 }
+              }));
+              let tot = { out: { rides:0,dist:0,elev:0,time:0 }, in: { rides:0,dist:0,elev:0,time:0 } };
+            
+              rides.forEach(r => {
+                const mi = new Date(r.start_date).getMonth();
+                const bucket = isIndoor(r) ? 'in' : 'out';
+                months[mi][bucket].rides++;
+                months[mi][bucket].dist += r.distance / 1000;
+                months[mi][bucket].elev += r.total_elevation_gain;
+                months[mi][bucket].time += r.moving_time;
+                tot[bucket].rides++;
+                tot[bucket].dist += r.distance / 1000;
+                tot[bucket].elev += r.total_elevation_gain;
+                tot[bucket].time += r.moving_time;
+              });
+            
+              const totalDist = tot.out.dist + tot.in.dist;
+              const totalElev = tot.out.elev + tot.in.elev;
+              const totalTime = tot.out.time + tot.in.time;
+            
+              // Stat cards — totals
+              document.getElementById('statRides').textContent = rides.length;
+              document.getElementById('statDist').innerHTML = Math.round(d(totalDist)).toLocaleString() + `<span class="stat-unit">${dUnit()}</span>`;
+              document.getElementById('statElev').innerHTML = Math.round(totalElev).toLocaleString() + '<span class="stat-unit">m</span>';
+              document.getElementById('statTime').innerHTML = `${Math.floor(totalTime/3600)}<span class="stat-unit">h</span> ${Math.floor((totalTime%3600)/60)}<span class="stat-unit">m</span>`;
+            
+              // Split pills
+              document.getElementById('splitRidesOut').textContent = `☀️ ${tot.out.rides} outdoor`;
+              document.getElementById('splitRidesIn').textContent  = `🏠 ${tot.in.rides} indoor`;
+              document.getElementById('splitDistOut').textContent  = `☀️ ${Math.round(d(tot.out.dist)).toLocaleString()} ${dUnit()}`;
+              document.getElementById('splitDistIn').textContent   = `🏠 ${Math.round(d(tot.in.dist)).toLocaleString()} ${dUnit()}`;
+              document.getElementById('splitElevOut').textContent  = `☀️ ${Math.round(tot.out.elev).toLocaleString()} m`;
+              document.getElementById('splitElevIn').textContent   = `🏠 ${Math.round(tot.in.elev).toLocaleString()} m`;
+              document.getElementById('splitTimeOut').textContent  = `☀️ ${fmtTime(tot.out.time)}`;
+              document.getElementById('splitTimeIn').textContent   = `🏠 ${fmtTime(tot.in.time)}`;
+            
+              // Deltas
+              const now = new Date();
+              const dayOfYear = Math.floor((now - new Date(year, 0, 1)) / 86400000) + 1;
+              const daysInYear = 365 + (year % 4 === 0 ? 1 : 0);
+              document.getElementById('statRidesDelta').textContent = `${Math.round((dayOfYear/daysInYear)*100)}% of year elapsed`;
+              document.getElementById('statDistDelta').textContent = `${Math.round(d(totalDist)/dayOfYear*7)} ${dUnit()}/week avg`;
+              document.getElementById('statElevDelta').textContent = unit === 'km'
+                ? `${Math.round(totalElev/(totalDist||1))} m per km`
+                : `${Math.round(totalElev/(d(totalDist)||1))} m per mi`;
+              document.getElementById('statTimeDelta').textContent = `${(d(totalDist)/(totalTime/3600||1)).toFixed(1)} ${dUnit()}/h avg`;
+            
+              // CO2 saved — outdoor rides only, UK avg car 170g/km, cycling ~21g/km (body metabolism)
+              const CAR_G_PER_KM = 170;
+              const BIKE_G_PER_KM = 21;
+              const co2SavedKg = (tot.out.dist * (CAR_G_PER_KM - BIKE_G_PER_KM)) / 1000;
+              document.getElementById('statCo2').innerHTML = Math.round(co2SavedKg).toLocaleString() + '<span class="stat-unit">kg</span>';
+              const trees = (co2SavedKg / 21).toFixed(1); // avg tree absorbs ~21kg CO2/year
+              document.getElementById('statCo2Delta').textContent = `≈ ${trees} trees worth (annual)`;
+              document.getElementById('statCo2Method').textContent = `vs UK avg car · outdoor rides only`;
+            
+              // Month slices
+              const curMonth = now.getFullYear() === year ? now.getMonth() : 11;
+              const labels = MONTH_NAMES.slice(0, curMonth + 1);
+              const outDist = months.slice(0,curMonth+1).map(mo => Math.round(d(mo.out.dist)));
+              const inDist  = months.slice(0,curMonth+1).map(mo => Math.round(d(mo.in.dist)));
+              const outElev = months.slice(0,curMonth+1).map(mo => Math.round(mo.out.elev));
+              const inElev  = months.slice(0,curMonth+1).map(mo => Math.round(mo.in.elev));
+            
+              // Cumulative lines
+              let cOut=0, cIn=0;
+              const cumulOut = outDist.map(v => { cOut+=v; return cOut; });
+              const cumulIn  = inDist.map(v  => { cIn+=v;  return cIn; });
+            
+              const base = { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } };
+              const scaleOpts = { x: { grid:{display:false}, ticks:{font:{size:11}}, stacked:true }, y: { grid:{color:'#f0efe9'}, ticks:{font:{size:11}}, stacked:true } };
+            
+              if (distChartInst) distChartInst.destroy();
+              distChartInst = new Chart(document.getElementById('distChart'), {
+                type: 'bar',
+                data: { labels, datasets: [
+                  { label:'Outdoor', data: outDist, backgroundColor:'#FC4C02', borderRadius:0 },
+                  { label:'Indoor',  data: inDist,  backgroundColor:'#4a80d4', borderRadius:4 }
+                ]},
+                options: { ...base, scales: scaleOpts }
+              });
+              document.querySelector('#distChart').closest('.chart-card').querySelector('.chart-title').textContent = `Monthly distance (${dUnit()})`;
+            
+              if (elevChartInst) elevChartInst.destroy();
+              elevChartInst = new Chart(document.getElementById('elevChart'), {
+                type: 'bar',
+                data: { labels, datasets: [
+                  { label:'Outdoor', data: outElev, backgroundColor:'#3d3d3d', borderRadius:0 },
+                  { label:'Indoor',  data: inElev,  backgroundColor:'#aaaaaa', borderRadius:4 }
+                ]},
+                options: { ...base, scales: scaleOpts }
+              });
+            
+              if (cumulChartInst) cumulChartInst.destroy();
+              cumulChartInst = new Chart(document.getElementById('cumulChart'), {
+                type: 'line',
+                data: { labels, datasets: [
+                  { label:'Outdoor', data: cumulOut, borderColor:'#FC4C02', borderWidth:2, pointRadius:3, pointBackgroundColor:'#FC4C02', fill:false, tension:0.3 },
+                  { label:'Indoor',  data: cumulIn,  borderColor:'#4a80d4', borderWidth:2, pointRadius:3, pointBackgroundColor:'#4a80d4', fill:false, tension:0.3, borderDash:[4,3] }
+                ]},
+                options: { ...base, scales: { x:{grid:{display:false},ticks:{font:{size:11}}}, y:{grid:{color:'#f0efe9'},ticks:{font:{size:11}}} } }
+              });
+              document.querySelector('#cumulChart').closest('.chart-card').querySelector('.chart-title').textContent = `Cumulative distance YTD (${dUnit()})`;
+            
+              // Monthly table
+              const tbody = document.getElementById('monthTable');
+              tbody.innerHTML = '';
+              document.getElementById('distColHead').textContent = `Outdoor (${dUnit()})`;
+              document.getElementById('distInColHead').textContent = `Indoor (${dUnit()})`;
+              let totR=0, totDout=0, totDin=0, totE=0, totT=0;
+              months.slice(0,curMonth+1).forEach((mo, i) => {
+                const totalMo = mo.out.rides + mo.in.rides;
+                if (totalMo === 0) return;
+                const row = document.createElement('tr');
+                row.innerHTML = `<td>${MONTH_NAMES[i]}</td>`
+                  + `<td>${totalMo}</td>`
+                  + `<td>${Math.round(d(mo.out.dist)).toLocaleString()} ${dUnit()}</td>`
+                  + `<td style="color:#4a80d4">${Math.round(d(mo.in.dist)).toLocaleString()} ${dUnit()}</td>`
+                  + `<td>${Math.round(mo.out.elev + mo.in.elev).toLocaleString()} m</td>`
+                  + `<td>${fmtTime(mo.out.time + mo.in.time)}</td>`;
+                tbody.appendChild(row);
+                totR += totalMo; totDout += mo.out.dist; totDin += mo.in.dist;
+                totE += mo.out.elev + mo.in.elev; totT += mo.out.time + mo.in.time;
+              });
+              const totRow = document.createElement('tr');
+              totRow.className = 'total';
+              totRow.innerHTML = `<td>Total</td><td>${totR}</td>`
+                + `<td>${Math.round(d(totDout)).toLocaleString()} ${dUnit()}</td>`
+                + `<td style="color:#4a80d4">${Math.round(d(totDin)).toLocaleString()} ${dUnit()}</td>`
+                + `<td>${Math.round(totE).toLocaleString()} m</td>`
+                + `<td>${fmtTime(totT)}</td>`;
+              tbody.appendChild(totRow);
+            
+              show('dashboard');
+            }
+            
+            // Embedded credentials
+            const STRAVA_CLIENT_ID     = '255408';
+            const STRAVA_CLIENT_SECRET = 'c4a5f446070e867f80aa8c0624d5144dde307705';
+            const STRAVA_REFRESH_TOKEN = 'd5c11f193ee00ad81081fa31c662f71a5bee08a0';
+            
+            async function getFreshToken() {
+              const cached = JSON.parse(localStorage.getItem('stravaTokenCache') || '{}');
+              if (cached.access_token && cached.expires_at && Date.now() / 1000 < cached.expires_at - 60) {
+                return cached.access_token;
+              }
+              const res = await fetch('https://www.strava.com/oauth/token', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  client_id: STRAVA_CLIENT_ID,
+                  client_secret: STRAVA_CLIENT_SECRET,
+                  refresh_token: STRAVA_REFRESH_TOKEN,
+                  grant_type: 'refresh_token'
+                })
+              });
+              const data = await res.json();
+              if (!data.access_token) throw new Error(data.message || 'Token refresh failed');
+              localStorage.setItem('stravaTokenCache', JSON.stringify({
+                access_token: data.access_token,
+                expires_at: data.expires_at
+              }));
+              return data.access_token;
+            }
+            
+            // Init
+            unit = localStorage.getItem('stravaUnit') || 'km';
+            document.getElementById('btnKm').classList.toggle('active', unit === 'km');
+            document.getElementById('btnMi').classList.toggle('active', unit === 'mi');
+            getFreshToken().then(loadDashboard).catch(e => { show('authScreen'); showError(e.message); });
+        </script>
+    </body>
+</html>
