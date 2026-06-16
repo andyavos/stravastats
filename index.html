@@ -87,13 +87,6 @@
             
             /* Error */
             .error-msg { background: #fff3f0; border: 1px solid #ffc5b2; border-radius: 8px; padding: 12px 16px; font-size: 0.88rem; color: #c0391a; margin-top: 1rem; max-width: 420px; }
-            
-            .instructions { background: #fff; border: 0.5px solid #e0dfd8; border-radius: 12px; padding: 1.5rem; max-width: 480px; text-align: left; font-size: 0.88rem; color: #555; line-height: 1.7; }
-            .instructions h3 { font-size: 0.9rem; font-weight: 500; color: #1a1a1a; margin-bottom: 0.75rem; }
-            .instructions ol { padding-left: 1.2rem; }
-            .instructions li { margin-bottom: 0.4rem; }
-            .instructions a { color: #FC4C02; }
-            .instructions code { background: #f5f5f3; padding: 1px 5px; border-radius: 4px; font-size: 0.82rem; }
         </style>
     </head>
     <body>
@@ -109,47 +102,6 @@
                 <p>
                     Connect your Strava account to see your year-to-date cycling stats — mileage, elevation, ride count, and monthly breakdown.
                 </p>
-                <div class="instructions">
-                    <h3>
-                        How to get your access token
-                    </h3>
-                    <ol>
-                        <li>
-                            Go to
-                            <a href="https://www.strava.com/settings/api" target="_blank">
-                                strava.com/settings/api
-                            </a>
-                            and create an app (any name/website)
-                        </li>
-                        <li>
-                            Note your
-                            <strong>
-                                Client ID
-                            </strong>
-                            and
-                            <strong>
-                                Client Secret
-                            </strong>
-                        </li>
-                        <li>
-                            Visit this URL in your browser (replace CLIENT_ID):
-                            <br>
-                            <code>
-                                https://www.strava.com/oauth/authorize?client_id=CLIENT_ID&redirect_uri=http://localhost&response_type=code&scope=activity:read_all
-                            </code>
-                        </li>
-                        <li>
-                            After approving, copy the
-                            <code>
-                                code=
-                            </code>
-                            value from the redirect URL
-                        </li>
-                        <li>
-                            Exchange it for a token using the form below (or via curl/Postman)
-                        </li>
-                    </ol>
-                </div>
                 <div style="width:100%;max-width:420px;display:flex;flex-direction:column;gap:10px;margin-top:0.5rem">
                     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
                         <input id="clientId" placeholder="Client ID" style="border:1px solid #ddd;border-radius:8px;padding:10px 14px;font-size:0.9rem"/>
