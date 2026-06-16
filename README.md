@@ -1,4 +1,4 @@
-# stravastats
+# Strava Stats
 ### Strava Year-to-date Dashboard
 
 Connect your Strava account to see your year-to-date cycling stats. Mileage, elevation, ride count, and monthly breakdown.
